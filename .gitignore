@@ -2,8 +2,14 @@
 node_modules
 package-lock.json
 package.json
-src/__pycache__
-llm_sdk/llm_sdk/__pycache__
-src/uv.lock
-uv.lock
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
 en.subject.pdf
+
+# Corpus, generated indexes/outputs, model weights: never commit
+data/
+*.pt
+*.bin
+*.safetensors

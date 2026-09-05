@@ -15,10 +15,10 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 - [x] Créer `.gitignore` (partiel)
 - [x] Créer le `Makefile` avec les règles `install`, `run`, `debug`, `clean`, `lint`
 - [ ] Ajouter la règle `lint-strict` au Makefile (optionnel, recommandé : `flake8 .` + `mypy . --strict`)
-- [x] Ajouter les dépendances dans `pyproject.toml` (`transformers`, `fire`, `tqdm`, `pydantic`, `flake8`, `mypy` — `bm25s` en attente du choix BM25 vs TF-IDF)
+- [x] Ajouter les dépendances dans `pyproject.toml` (`transformers`, `bm25s`, `fire`, `tqdm`, `pydantic`, `flake8`, `mypy`)
 - [x] S'assurer que `uv sync` seul suffit à installer le projet (le correcteur et la moulinette ne lancent que `uv sync`, rien d'autre)
-- [ ] Créer la structure de dossiers data attendue par la moulinette (voir "Structure de dépôt attendue" plus bas)
-- [ ] Compléter `.gitignore` (ajouter `data/`, poids de modèles, outputs générés — rien de tout ça ne doit être commit, ça peut peser plusieurs Go)
+- [x] Créer la structure de dossiers data attendue par la moulinette : `data/raw/vllm-0.10.1/` peuplé depuis l'archive fournie (3226 fichiers, 1763 `.py`, 178 `.md`)
+- [x] Compléter `.gitignore` (ajouté `data/`, poids de modèles ; **retiré `uv.lock` qui était incorrectement ignoré alors que le sujet l'exige dans le dépôt**)
 
 ---
 
@@ -39,21 +39,21 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 
 ## 3. Knowledge Base Ingestion System
 
-- [ ] Lire et parcourir tous les fichiers utiles du dépôt vLLM (`data/raw/vllm-0.10.1/`)
-- [ ] Implémenter le **chunking Python** (par fonctions/classes avec `ast`)
-- [ ] Implémenter le **chunking texte/Markdown** (par paragraphes/sections)
-- [ ] Taille de chunk max : 2000 caractères par défaut, **configurable via `--max_chunk_size`**
-- [ ] Ne jamais dépasser `--max_chunk_size` : la moulinette rejette toute source récupérée de plus de 2000 caractères (`max_context_length`), et une seule source trop longue invalide toute la sortie
-- [ ] Stocker les chunks avec leurs `file_path` (chemin exact, relatif à la racine du projet, tel qu'ingéré — ex. `data/raw/vllm-0.10.1/docs/features/lora.md`), `first_character_index`, `last_character_index`
-- [ ] Persister l'index sous `data/processed/`
-- [ ] Indexation complète en **moins de 5 minutes**
+- [x] Lire et parcourir tous les fichiers utiles du dépôt vLLM (`src/indexer.py::_iter_corpus_files`, filtré sur `.py`/`.md`/`.rst`/`.txt`)
+- [x] Implémenter le **chunking Python** (`src/chunking.py::chunk_python_source`, découpage par fonctions/classes avec `ast`, decorateurs inclus, hard-split si trop gros, fallback gracieux si syntaxe invalide)
+- [x] Implémenter le **chunking texte/Markdown** (`src/chunking.py::chunk_markdown_source`, découpage par paragraphes séparés par lignes vides, un titre `#`..`######` force une nouvelle section, hard-split si un paragraphe est trop gros)
+- [x] Taille de chunk max : 2000 caractères par défaut, **configurable via `--max_chunk_size`** (`build_index(max_chunk_size=...)`)
+- [x] Ne jamais dépasser `--max_chunk_size` : chaque chunk hérite de la contrainte des chunkers (voir section chunking) qui hard-split tout ce qui dépasse
+- [x] Stocker les chunks avec leurs `file_path` (relatif, préservé tel que passé à `--raw_dir`), `first_character_index`, `last_character_index` — via `MinimalSource`, testé avec chemins relatifs
+- [x] Persister l'index sous `data/processed/` (`src/indexer.py::build_index`, `bm25s.BM25.save`, corpus metadata en `corpus.jsonl`)
+- [ ] Indexation complète en **moins de 5 minutes** (à mesurer sur le vrai corpus vLLM une fois `data/raw/` peuplé)
 
 ---
 
 ## 4. Retrieval System
 
-- [ ] Implémenter **au moins une** méthode lexicale classique : **BM25** (via `bm25s`) ou **TF-IDF** (les deux méthodes d'indexation/recherche restent au choix, on peut ajouter d'autres méthodes en plus)
-- [ ] Sauvegarder l'index dans `data/processed/` pour éviter de recalculer
+- [x] Implémenter **BM25** (via `bm25s`) — choisi plutôt que TF-IDF pour mieux gérer l'hétérogénéité code/doc du corpus vLLM (on peut ajouter d'autres méthodes en plus). Indexation faite dans `src/indexer.py::build_index`, testée avec un round-trip index→recherche (`bm25s.BM25.load` + `.retrieve`)
+- [x] Sauvegarder l'index dans `data/processed/` pour éviter de recalculer
 - [ ] Retourner les top-k chunks les plus pertinents pour une requête
 - [ ] Supporter le **batch processing** de datasets JSON (`search_dataset`)
 - [ ] Throughput : **200 questions traitées en < 90 secondes** *(⚠️ changé : c'était 1000 questions dans l'ancien TODO, le sujet v2.0 dit 200)*
