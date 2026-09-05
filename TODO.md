@@ -46,7 +46,7 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 - [x] Ne jamais dépasser `--max_chunk_size` : chaque chunk hérite de la contrainte des chunkers (voir section chunking) qui hard-split tout ce qui dépasse
 - [x] Stocker les chunks avec leurs `file_path` (relatif, préservé tel que passé à `--raw_dir`), `first_character_index`, `last_character_index` — via `MinimalSource`, testé avec chemins relatifs
 - [x] Persister l'index sous `data/processed/` (`src/indexer.py::build_index`, `bm25s.BM25.save`, corpus metadata en `corpus.jsonl`)
-- [ ] Indexation complète en **moins de 5 minutes** (à mesurer sur le vrai corpus vLLM une fois `data/raw/` peuplé)
+- [x] Indexation complète en **moins de 5 minutes** — mesuré à 3.4s sur le vrai corpus vLLM (1969 fichiers, 18733 chunks)
 
 ---
 
@@ -54,10 +54,10 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 
 - [x] Implémenter **BM25** (via `bm25s`) — choisi plutôt que TF-IDF pour mieux gérer l'hétérogénéité code/doc du corpus vLLM (on peut ajouter d'autres méthodes en plus). Indexation faite dans `src/indexer.py::build_index`, testée avec un round-trip index→recherche (`bm25s.BM25.load` + `.retrieve`)
 - [x] Sauvegarder l'index dans `data/processed/` pour éviter de recalculer
-- [ ] Retourner les top-k chunks les plus pertinents pour une requête
-- [ ] Supporter le **batch processing** de datasets JSON (`search_dataset`)
-- [ ] Throughput : **200 questions traitées en < 90 secondes** *(⚠️ changé : c'était 1000 questions dans l'ancien TODO, le sujet v2.0 dit 200)*
-- [ ] Atteindre **Recall@5 ≥ 80%** sur les questions "docs" et **≥ 50%** sur les questions "code"
+- [x] Retourner les top-k chunks les plus pertinents pour une requête (`src/cli.py::RagCLI.search`)
+- [x] Supporter le **batch processing** de datasets JSON (`search_dataset`)
+- [x] Throughput : **200 questions traitées en < 90 secondes** — mesuré à 0.38s réel sur le corpus vLLM indexé, largement dans la limite
+- [ ] Atteindre **Recall@5 ≥ 80%** sur les questions "docs" et **≥ 50%** sur les questions "code" (pas mesurable sans dataset `AnsweredQuestions` de référence + commande `evaluate`)
 - [ ] `file_path` doit matcher **exactement** le chemin du corpus ingéré (comparaison verbatim par le correcteur)
 
 > ℹ️ La latence "cold start < 60s" qui figurait dans l'ancien TODO n'apparaît plus dans les critères de performance du sujet v2.0 (section VII.1.2 : seulement indexing time, throughput, recall@5).
@@ -89,16 +89,16 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 
 ## 7. Command-Line Interface (Python Fire)
 
-- [ ] `index --max_chunk_size <int>` — ingérer `data/raw/` et construire l'index sous `data/processed/`
-- [ ] `search <query> -k <int>` — recherche simple, top-k
-- [ ] `search_dataset --dataset_path <path> -k <int> --save_directory <dir>` — batch search → JSON `StudentSearchResults`
+- [x] `index --max_chunk_size <int>` — ingérer `data/raw/` et construire l'index sous `data/processed/` (`src/cli.py::RagCLI.index`)
+- [x] `search <query> -k <int>` — recherche simple, top-k (`src/cli.py::RagCLI.search`)
+- [x] `search_dataset --dataset_path <path> -k <int> --save_directory <dir>` — batch search → JSON `StudentSearchResults` (`src/cli.py::RagCLI.search_dataset`), testé avec un dataset factice + cas d'erreur
 - [ ] `answer <query> -k <int>` — répondre à une question
 - [ ] `answer_dataset --student_search_results_path <path> --save_directory <dir>` — batch answer → JSON `StudentSearchResultsAndAnswer`
 - [ ] `evaluate --student_search_results_path <path> --dataset_path <path>` — évaluation perso (recall@k)
-- [ ] Toutes les commandes invoquées via `uv run python -m src <command> [options]`
-- [ ] Tous les chemins d'entrée/sortie doivent être des arguments CLI configurables, jamais hardcodés
-- [ ] Gérer les erreurs gracieusement (query vide, query absurde, `k=0`, fichiers manquants, JSON malformé — jamais de crash avec traceback non géré)
-- [ ] Ajouter des barres de progression `tqdm` sur les opérations longues
+- [x] Commandes `index`/`search`/`search_dataset` invoquées via `uv run python -m src <command> [options]` (`src/__main__.py` + `src/cli.py`)
+- [x] Chemins d'entrée/sortie configurables via arguments CLI (`raw_dir`, `processed_dir`, `dataset_path`, `save_directory`, `index_dir`), jamais hardcodés
+- [x] Gestion gracieuse testée pour `index`/`search`/`search_dataset` : query vide, `k=0`, `k` > taille du corpus, index absent, fichier dataset manquant, JSON malformé, JSON de mauvaise forme — aucun crash avec traceback non géré
+- [x] Barres de progression `tqdm` sur `index` (chunking) et `search_dataset` (par question)
 
 ---
 
