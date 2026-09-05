@@ -15,7 +15,7 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 - [x] Créer `.gitignore` (partiel)
 - [x] Créer le `Makefile` avec les règles `install`, `run`, `debug`, `clean`, `lint`
 - [ ] Ajouter la règle `lint-strict` au Makefile (optionnel, recommandé : `flake8 .` + `mypy . --strict`)
-- [x] Ajouter les dépendances dans `pyproject.toml` (`transformers`, `bm25s`, `fire`, `tqdm`, `pydantic`, `flake8`, `mypy`)
+- [x] Ajouter les dépendances dans `pyproject.toml` (`transformers`, `torch`, `bm25s`, `fire`, `tqdm`, `pydantic`, `flake8`, `mypy`)
 - [x] S'assurer que `uv sync` seul suffit à installer le projet (le correcteur et la moulinette ne lancent que `uv sync`, rien d'autre)
 - [x] Créer la structure de dossiers data attendue par la moulinette : `data/raw/vllm-0.10.1/` peuplé depuis l'archive fournie (3226 fichiers, 1763 `.py`, 178 `.md`)
 - [x] Compléter `.gitignore` (ajouté `data/`, poids de modèles ; **retiré `uv.lock` qui était incorrectement ignoré alors que le sujet l'exige dans le dépôt**)
@@ -66,12 +66,11 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 
 ## 5. Answer Generation System
 
-- [ ] Charger le modèle **Qwen/Qwen3-0.6B** (via `transformers`, modèle par défaut obligatoire)
-- [ ] Autres modèles autorisés en plus, tant que tout fonctionne toujours avec Qwen/Qwen3-0.6B
-- [ ] Passer le contexte récupéré au LLM dans les limites de tokens
-- [ ] Générer des réponses en JSON structuré conforme à `StudentSearchResultsAndAnswer` / `MinimalAnswer`
-- [ ] La réponse doit être : cohérente, compréhensible, groundée dans les sources récupérées (pas d'hallucination majeure), pertinente par rapport à la question posée
-- [ ] Ajouter une barre de progression `tqdm` pour le traitement des datasets
+- [x] Charger le modèle **Qwen/Qwen3-0.6B** (via `transformers`, modèle par défaut obligatoire) — `src/generation.py::load_generator`, `model_name` configurable via `--model_name` sur `answer`/`answer_dataset` pour tester d'autres modèles
+- [x] Passer le contexte récupéré au LLM dans les limites de tokens (`src/generation.py::_build_prompt`, budget de caractères `MAX_CONTEXT_CHARS` réparti entre les sources, tronque plutôt que dépasser)
+- [x] Générer des réponses en JSON structuré conforme à `StudentSearchResultsAndAnswer` / `MinimalAnswer` (`src/cli.py::RagCLI.answer_dataset`)
+- [x] La réponse doit être cohérente/groundée : prompt qui force le modèle à répondre uniquement à partir du contexte fourni ; `enable_thinking=False` pour éviter le bruit du raisonnement Qwen3 dans la réponse finale ; testé manuellement sur le vrai corpus vLLM (ex. "What is a KV cache?" → réponse correcte et sourcée)
+- [x] Ajouter une barre de progression `tqdm` pour le traitement des datasets (`answer_dataset`)
 
 ---
 
@@ -92,13 +91,13 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 - [x] `index --max_chunk_size <int>` — ingérer `data/raw/` et construire l'index sous `data/processed/` (`src/cli.py::RagCLI.index`)
 - [x] `search <query> -k <int>` — recherche simple, top-k (`src/cli.py::RagCLI.search`)
 - [x] `search_dataset --dataset_path <path> -k <int> --save_directory <dir>` — batch search → JSON `StudentSearchResults` (`src/cli.py::RagCLI.search_dataset`), testé avec un dataset factice + cas d'erreur
-- [ ] `answer <query> -k <int>` — répondre à une question
-- [ ] `answer_dataset --student_search_results_path <path> --save_directory <dir>` — batch answer → JSON `StudentSearchResultsAndAnswer`
+- [x] `answer <query> -k <int>` — répondre à une question (`src/cli.py::RagCLI.answer`), testé sur le vrai corpus vLLM
+- [x] `answer_dataset --student_search_results_path <path> --save_directory <dir>` — batch answer → JSON `StudentSearchResultsAndAnswer` (`src/cli.py::RagCLI.answer_dataset`), testé en chaîne après `search_dataset`
 - [ ] `evaluate --student_search_results_path <path> --dataset_path <path>` — évaluation perso (recall@k)
-- [x] Commandes `index`/`search`/`search_dataset` invoquées via `uv run python -m src <command> [options]` (`src/__main__.py` + `src/cli.py`)
-- [x] Chemins d'entrée/sortie configurables via arguments CLI (`raw_dir`, `processed_dir`, `dataset_path`, `save_directory`, `index_dir`), jamais hardcodés
-- [x] Gestion gracieuse testée pour `index`/`search`/`search_dataset` : query vide, `k=0`, `k` > taille du corpus, index absent, fichier dataset manquant, JSON malformé, JSON de mauvaise forme — aucun crash avec traceback non géré
-- [x] Barres de progression `tqdm` sur `index` (chunking) et `search_dataset` (par question)
+- [x] Commandes `index`/`search`/`search_dataset`/`answer`/`answer_dataset` invoquées via `uv run python -m src <command> [options]` (`src/__main__.py` + `src/cli.py`)
+- [x] Chemins d'entrée/sortie configurables via arguments CLI (`raw_dir`, `processed_dir`, `dataset_path`, `save_directory`, `index_dir`, `student_search_results_path`, `model_name`), jamais hardcodés
+- [x] Gestion gracieuse testée pour `index`/`search`/`search_dataset`/`answer`/`answer_dataset` : query vide, `k=0`, `k` > taille du corpus, index absent, fichier dataset manquant, JSON malformé, JSON de mauvaise forme, modèle introuvable — aucun crash avec traceback non géré
+- [x] Barres de progression `tqdm` sur `index` (chunking), `search_dataset` (par question) et `answer_dataset` (par question)
 
 ---
 
@@ -122,12 +121,12 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 
 ## 9. Qualité du code
 
-- [ ] Python 3.10+, type hints partout (`typing`)
-- [ ] Toutes les fonctions passent `mypy` sans erreurs
-- [ ] Code conforme `flake8` (y compris les fichiers bonus)
-- [ ] Docstrings PEP 257 (Google ou NumPy style) sur toutes les fonctions et classes
-- [ ] Gestion des exceptions avec `try-except` (pas de crash non géré → considéré non fonctionnel)
-- [ ] Utiliser des context managers pour fichiers et connexions (pas de leaks de ressources)
+- [x] Python 3.10+, type hints partout (`typing`) — projet en 3.13, tous les fichiers `src/` et `main.py` typés
+- [x] Toutes les fonctions passent `mypy` sans erreurs — vérifié projet entier via `make lint` (`mypy src main.py ...`, `data/` exclu car ce n'est pas notre code)
+- [x] Code conforme `flake8` (y compris les fichiers bonus) — vérifié projet entier via `make lint` (`flake8 . --exclude=.venv,data`)
+- [x] Docstrings PEP 257 (Google ou NumPy style) sur toutes les fonctions et classes
+- [x] Gestion des exceptions avec `try-except` (pas de crash non géré → considéré non fonctionnel) — testé sur toutes les commandes CLI (index/search/search_dataset/answer/answer_dataset)
+- [x] Utiliser des context managers pour fichiers et connexions (pas de leaks de ressources) — `open(...) as ...` / `Path.read_text`/`write_text` partout, pas de fichier ouvert sans fermeture
 - [ ] (Recommandé) écrire des tests `pytest`/`unittest` couvrant les cas limites — non soumis/noté mais conseillé
 
 ---

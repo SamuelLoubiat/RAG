@@ -20,6 +20,6 @@ clean:
 	find . -type f -name "*.pyc" -delete
 
 lint: install
-	$(UV) run flake8 . --exclude=.venv,llm_sdk
-	$(UV) run mypy .  --warn-return-any --warn-unused-ignores --ignore-missing-imports \
+	$(UV) run flake8 . --exclude=.venv,data
+	$(UV) run mypy src main.py --warn-return-any --warn-unused-ignores --ignore-missing-imports \
 		--disallow-untyped-defs --check-untyped-defs

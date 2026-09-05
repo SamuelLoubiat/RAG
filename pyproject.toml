@@ -7,9 +7,18 @@ requires-python = ">=3.13"
 dependencies = [
     "pydantic",
     "transformers",
+    "torch",
     "bm25s",
     "fire",
     "tqdm",
     "flake8",
     "mypy",
 ]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
