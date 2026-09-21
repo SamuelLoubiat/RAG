@@ -132,12 +132,14 @@ questions in 0.38s. Both comfortably beat the subject's thresholds
 Done: setup, data models, Python/Markdown chunking, BM25 indexer,
 retrieval, answer generation (Qwen3-0.6B), `evaluate`/recall@k
 (section 6), CLI (`index`/`search`/`search_dataset`/`answer`/
-`answer_dataset`/`evaluate`), project-wide flake8/mypy clean.
+`answer_dataset`/`evaluate`), project-wide flake8/mypy clean, `README.md`
+(section 8, all required sections written in English, login `sloubiat`
+from `git log`, solo project).
 
-Not done: `README.md` (section 8, entirely empty, must be in English);
-optional `lint-strict` Makefile rule; optional pytest/unittest tests;
-bonus features (section 10, only gradable once mandatory part is fully
-done).
+The mandatory part is functionally complete. Not done: optional
+`lint-strict` Makefile rule; optional pytest/unittest tests; bonus
+features (section 10, only gradable once mandatory part is fully done —
+it is now, so these are worth picking up if there's time left).
 
 Recall@5 thresholds (≥80% docs, ≥50% code) are now measured for real using
 the provided ground-truth datasets

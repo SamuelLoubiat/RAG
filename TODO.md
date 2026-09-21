@@ -104,19 +104,17 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 
 ## 8. README.md
 
-> `README.md` existe mais est **vide** — tout est à faire. Rédigé **en anglais**.
-
-- [ ] Première ligne en italique : *"This project has been created as part of the 42 curriculum by \<login1>, \<login2>, \<login3>[...]."*
-- [ ] Section **Description** : objectif et aperçu du projet
-- [ ] Section **Instructions** : installation et exécution
-- [ ] Section **Resources** : références classiques sur le sujet + description de l'usage de l'IA (pour quelles tâches, quelles parties du projet)
-- [ ] Section **System architecture** : composants du pipeline RAG et leurs interactions
-- [ ] Section **Chunking strategy** : approche de segmentation
-- [ ] Section **Retrieval method** : algorithme et mécanisme de ranking
-- [ ] Section **Performance analysis** : discussion des scores recall@k et des performances
-- [ ] Section **Design decisions** : choix d'implémentation clés
-- [ ] Section **Challenges faced** : difficultés rencontrées et solutions
-- [ ] Section **Example usage** : exemples concrets de commandes
+- [x] Première ligne en italique : *"This project has been created as part of the 42 curriculum by sloubiat."* (login récupéré depuis `git log`, projet solo)
+- [x] Section **Description** : objectif et aperçu du projet
+- [x] Section **Instructions** : installation et exécution
+- [x] Section **Resources** : références classiques (BM25, RAG, bm25s, Qwen3, ast, pydantic, Fire) + description honnête de l'usage de l'IA (Claude Code, tâches précises listées)
+- [x] Section **System architecture** : composants du pipeline RAG et leurs interactions (schéma ASCII)
+- [x] Section **Chunking strategy** : approche de segmentation (AST Python + paragraphes Markdown)
+- [x] Section **Retrieval method** : BM25 via `bm25s`, justification vs TF-IDF
+- [x] Section **Performance analysis** : chiffres réels (indexation 3.4s, throughput 0.38s, recall@5 docs 82.0%/code 50.5%)
+- [x] Section **Design decisions** : BM25, chunking AST, torch CPU pin, re-lecture du texte depuis disque, `enable_thinking=False`, gestion gracieuse des erreurs
+- [x] Section **Challenges faced** : bugs `bm25s`, gotcha `BatchEncoding` de transformers, régression torch/CUDA, marge serrée sur recall@5 code
+- [x] Section **Example usage** : toutes les commandes CLI avec des exemples concrets sur les vrais datasets
 
 ---
 
@@ -172,4 +170,3 @@ data/output/search_results_and_answer/<DatasetScope>/ # sortie de `answer_datase
 
 - [ ] Prévoir un "recode" possible en soutenance : modification mineure demandée à la volée (quelques lignes, comportement, structure de données) pour vérifier la compréhension réelle du projet — pas forcément dans l'environnement habituel
 
-claude --resume 693d0d08-73c5-40c7-974e-aa5e834ed3fb
