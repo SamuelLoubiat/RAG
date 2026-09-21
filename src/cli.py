@@ -5,9 +5,11 @@ from pathlib import Path
 
 from tqdm import tqdm
 
+from src.evaluation import evaluate_recall, format_report
 from src.generation import DEFAULT_MODEL, generate_answer, load_generator
 from src.indexer import build_index
 from src.models import (
+    AnsweredQuestion,
     MinimalAnswer,
     MinimalSearchResults,
     RagDataset,
@@ -204,3 +206,56 @@ class RagCLI:
         out_path = out_dir / Path(student_search_results_path).name
         out_path.write_text(output.model_dump_json(indent=2), encoding="utf-8")
         print(f"Saved student_search_results_and_answer to {out_path}")
+
+    def evaluate(
+        self,
+        student_search_results_path: str,
+        dataset_path: str,
+    ) -> None:
+        """Compute recall@k (k=1,3,5,10) of a StudentSearchResults file
+        against the ground-truth sources of an AnsweredQuestions dataset.
+
+        For our own iteration only: the official recall@k score at
+        soutenance is computed by the moulinette, never by this command.
+        """
+        try:
+            with open(
+                student_search_results_path, encoding="utf-8"
+            ) as results_file:
+                raw_results = json.load(results_file)
+            student_results = StudentSearchResults.model_validate(
+                raw_results
+            )
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            print(
+                "Could not load student search results "
+                f"'{student_search_results_path}': {exc}"
+            )
+            return
+
+        try:
+            with open(dataset_path, encoding="utf-8") as dataset_file:
+                raw_dataset = json.load(dataset_file)
+            dataset = RagDataset.model_validate(raw_dataset)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            print(f"Could not load dataset '{dataset_path}': {exc}")
+            return
+
+        ground_truth = {
+            question.question_id: question
+            for question in dataset.rag_questions
+            if isinstance(question, AnsweredQuestion)
+        }
+        if not ground_truth:
+            print(
+                f"No AnsweredQuestion with ground truth found in "
+                f"'{dataset_path}'."
+            )
+            return
+
+        report = evaluate_recall(
+            student_results.search_results,
+            ground_truth,
+            retrieval_k=student_results.k,
+        )
+        print(format_report(report))

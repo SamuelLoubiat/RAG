@@ -57,7 +57,7 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 - [x] Retourner les top-k chunks les plus pertinents pour une requête (`src/cli.py::RagCLI.search`)
 - [x] Supporter le **batch processing** de datasets JSON (`search_dataset`)
 - [x] Throughput : **200 questions traitées en < 90 secondes** — mesuré à 0.38s réel sur le corpus vLLM indexé, largement dans la limite
-- [ ] Atteindre **Recall@5 ≥ 80%** sur les questions "docs" et **≥ 50%** sur les questions "code" (pas mesurable sans dataset `AnsweredQuestions` de référence + commande `evaluate`)
+- [x] Atteindre **Recall@5 ≥ 80%** sur les questions "docs" et **≥ 50%** sur les questions "code" — mesuré avec `evaluate` sur les vrais datasets fournis (`data/datasets/AnsweredQuestions/dataset_docs_public.json` — 100 questions — et `dataset_code_public.json` — 99 questions —, `search_dataset --k 10`) : **docs 82.0%** (recall@1 63.0%, @3 79.0%, @10 89.0%), **code 50.5%** (recall@1 26.3%, @3 41.4%). Les deux passent le seuil, mais le code est très juste (+0.5 pt) — à re-vérifier si le chunking Python change
 - [ ] `file_path` doit matcher **exactement** le chemin du corpus ingéré (comparaison verbatim par le correcteur)
 
 > ℹ️ La latence "cold start < 60s" qui figurait dans l'ancien TODO n'apparaît plus dans les critères de performance du sujet v2.0 (section VII.1.2 : seulement indexing time, throughput, recall@5).
@@ -76,12 +76,13 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 
 ## 6. Evaluation System
 
-- [ ] Implémenter la commande `evaluate` (calcul de **recall@k**, k = 1, 3, 5, 10) — **pour son propre usage/itération uniquement**
-- [ ] Comparer les sources récupérées aux annotations ground truth (dataset `AnsweredQuestions`)
-- [ ] Une source est "trouvée" si même `file_path` **et** chevauchement (IoU) ≥ 5% avec la plage de référence
-- [ ] Score par question : `nombre_trouvées / total_sources_correctes`
-- [ ] Afficher un rapport de performance complet
-- [ ] **Ne jamais importer ni appeler la moulinette** dans le code du projet : le recall@k officiel de la soutenance est calculé par l'exécutable `moulinette` fourni (`evaluate_student_search_results`), pas par notre `evaluate`
+- [x] Implémenter la commande `evaluate` (calcul de **recall@k**, k = 1, 3, 5, 10) — **pour son propre usage/itération uniquement** (`src/evaluation.py::evaluate_recall`, `src/cli.py::RagCLI.evaluate`)
+- [x] Comparer les sources récupérées aux annotations ground truth (dataset `AnsweredQuestions`) — matching par `question_id`, sources ground truth extraites des `AnsweredQuestion` du `RagDataset`
+- [x] Une source est "trouvée" si même `file_path` **et** chevauchement (IoU) ≥ 5% avec la plage de référence (`src/evaluation.py::_overlap_iou`/`_is_match`, `MIN_IOU = 0.05`)
+- [x] Score par question : `nombre_trouvées / total_sources_correctes` (`src/evaluation.py::recall_at_k`)
+- [x] Afficher un rapport de performance complet (`src/evaluation.py::format_report`, moyenne par k + avertissement si k demandé > k de récupération réel)
+- [x] **Ne jamais importer ni appeler la moulinette** dans le code du projet — `src/evaluation.py` ne dépend que de `src/models.py`, aucune référence à la moulinette
+- [x] Testé avec un dataset synthétique (source exacte → recall 100%, source à un rang tardif → recall partiel selon k, source inexistante → recall 0%) et les cas d'erreur (fichier manquant, JSON malformé, dataset sans `AnsweredQuestion`)
 - [ ] Penser à renommer `moulinette-ubuntu`/`moulinette-fedora` en `moulinette` avant de l'exécuter localement pour tester
 
 ---
@@ -93,10 +94,10 @@ Construire un système **Retrieval-Augmented Generation (RAG)** en Python capabl
 - [x] `search_dataset --dataset_path <path> -k <int> --save_directory <dir>` — batch search → JSON `StudentSearchResults` (`src/cli.py::RagCLI.search_dataset`), testé avec un dataset factice + cas d'erreur
 - [x] `answer <query> -k <int>` — répondre à une question (`src/cli.py::RagCLI.answer`), testé sur le vrai corpus vLLM
 - [x] `answer_dataset --student_search_results_path <path> --save_directory <dir>` — batch answer → JSON `StudentSearchResultsAndAnswer` (`src/cli.py::RagCLI.answer_dataset`), testé en chaîne après `search_dataset`
-- [ ] `evaluate --student_search_results_path <path> --dataset_path <path>` — évaluation perso (recall@k)
-- [x] Commandes `index`/`search`/`search_dataset`/`answer`/`answer_dataset` invoquées via `uv run python -m src <command> [options]` (`src/__main__.py` + `src/cli.py`)
+- [x] `evaluate --student_search_results_path <path> --dataset_path <path>` — évaluation perso (recall@k) (`src/cli.py::RagCLI.evaluate`)
+- [x] Commandes `index`/`search`/`search_dataset`/`answer`/`answer_dataset`/`evaluate` invoquées via `uv run python -m src <command> [options]` (`src/__main__.py` + `src/cli.py`)
 - [x] Chemins d'entrée/sortie configurables via arguments CLI (`raw_dir`, `processed_dir`, `dataset_path`, `save_directory`, `index_dir`, `student_search_results_path`, `model_name`), jamais hardcodés
-- [x] Gestion gracieuse testée pour `index`/`search`/`search_dataset`/`answer`/`answer_dataset` : query vide, `k=0`, `k` > taille du corpus, index absent, fichier dataset manquant, JSON malformé, JSON de mauvaise forme, modèle introuvable — aucun crash avec traceback non géré
+- [x] Gestion gracieuse testée pour `index`/`search`/`search_dataset`/`answer`/`answer_dataset`/`evaluate` : query vide, `k=0`, `k` > taille du corpus, index absent, fichier dataset manquant, JSON malformé, JSON de mauvaise forme, modèle introuvable, dataset sans `AnsweredQuestion` — aucun crash avec traceback non géré
 - [x] Barres de progression `tqdm` sur `index` (chunking), `search_dataset` (par question) et `answer_dataset` (par question)
 
 ---
@@ -170,3 +171,5 @@ data/output/search_results_and_answer/<DatasetScope>/ # sortie de `answer_datase
 ## Notes soutenance (Chapter X)
 
 - [ ] Prévoir un "recode" possible en soutenance : modification mineure demandée à la volée (quelques lignes, comportement, structure de données) pour vérifier la compréhension réelle du projet — pas forcément dans l'environnement habituel
+
+claude --resume 693d0d08-73c5-40c7-974e-aa5e834ed3fb
