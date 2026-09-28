@@ -6,6 +6,7 @@ from typing import List, Optional
 import bm25s
 
 from src.models import MinimalSource
+from src.tokenization import expand_identifiers
 
 
 def load_retriever(index_dir: str = "data/processed") -> bm25s.BM25:
@@ -43,6 +44,8 @@ def search(
     if top_k <= 0:
         return []
 
-    query_tokens = bm25s.tokenize(query, stopwords=None, show_progress=False)
+    query_tokens = bm25s.tokenize(
+        expand_identifiers(query), stopwords=None, show_progress=False
+    )
     results, _ = retriever.retrieve(query_tokens, k=top_k, show_progress=False)
     return [MinimalSource(**doc) for doc in results[0]]

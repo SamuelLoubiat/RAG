@@ -98,6 +98,17 @@ deleting anything — ask the user before removing files you didn't create.
   return_tensors="pt")` returns a `BatchEncoding` (dict-like), not a bare
   `Tensor` — pass `tokenize=False` to get a prompt string, then
   `tokenizer(prompt_text, return_tensors="pt")` and `model.generate(**encoded, ...)`.
+- `src/tokenization.py` — `expand_identifiers(text)`: appends
+  space-split snake_case/camelCase subwords for every multi-part
+  identifier (e.g. `get_kv_cache_size` → also indexed as `get kv cache
+  size`), on top of the original text. Fixes a real lexical mismatch:
+  `bm25s` tokenizes identifiers as single opaque tokens, so a
+  natural-language query like "What is a KV cache?" never matched code
+  identifiers containing "kv_cache" before this. Applied to corpus text
+  in `src/indexer.py::build_index` and to the query in
+  `src/search.py::search` — both sides must expand identifiers the same
+  way for it to help. Measured gain: recall@5 on code questions
+  50.5% → 70.7% (+20.2 pts), docs stable/slightly up (82.0% → 84.0%).
 - `src/evaluation.py` — own-use-only recall@k (k=1,3,5,10), never the
   moulinette's official score. `_overlap_iou`/`_is_match` (IoU >= 5% +
   same `file_path`), `recall_at_k`, `evaluate_recall` (matches
@@ -144,9 +155,16 @@ it is now, so these are worth picking up if there's time left).
 Recall@5 thresholds (≥80% docs, ≥50% code) are now measured for real using
 the provided ground-truth datasets
 (`data/datasets/AnsweredQuestions/dataset_{docs,code}_public.json`, 100/99
-questions, via `search_dataset --k 10` then `evaluate`): **docs 82.0%**,
-**code 50.5%** — both pass, but code is very close to the threshold
-(+0.5 pt margin) — re-check if the Python chunking changes.
+questions, via `search_dataset --k 10` then `evaluate`, cross-checked with
+the real moulinette `evaluate_student_search_results`): **docs 84.0%**,
+**code 70.7%** — both pass with a comfortable margin now, thanks to
+`src/tokenization.py::expand_identifiers` (see above).
+
+There's a real `moulinette` binary at `~/Downloads/moulinette/` (pick
+`moulinette-ubuntu` or `-fedora` per `/etc/os-release`). Copy it to the
+scratchpad directory and rename to `moulinette` there — **never into the
+repo** (it must never be committed or imported by project code). Usage:
+`./moulinette evaluate_student_search_results <student_search_results.json> <ground_truth_dataset.json> --k 10 --threshold 0.80`.
 
 ## Style/collaboration notes
 

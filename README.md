@@ -152,6 +152,15 @@ path + character range) reconstructed from the persisted index metadata.
 The index is saved to `data/processed/` so it never needs to be rebuilt
 between runs.
 
+Before tokenizing, both the corpus and the query pass through
+`src/tokenization.py::expand_identifiers`, which appends space-split
+subwords for every snake_case/camelCase identifier (e.g.
+`get_kv_cache_size` is also indexed as `get kv cache size`), on top of
+the original text. `bm25s` otherwise tokenizes identifiers as single
+opaque tokens, so a natural-language question never matched the code
+identifiers it was actually asking about — see
+[Challenges faced](#challenges-faced) for how this was found.
+
 ## Performance analysis
 
 Measured on the real vLLM 0.10.1 corpus (1969 indexable files, 18733
@@ -161,26 +170,28 @@ chunks):
 |---|---|---|
 | Indexing time | 3.4s | < 5 min |
 | Throughput (200 questions, `search_dataset`) | 0.38s | < 90s |
-| Recall@5 — docs questions | 82.0% | ≥ 80% |
-| Recall@5 — code questions | 50.5% | ≥ 50% |
+| Recall@5 — docs questions | 84.0% | ≥ 80% |
+| Recall@5 — code questions | 70.7% | ≥ 50% |
 
-Recall was measured with `evaluate` against the provided ground-truth
-datasets (`data/datasets/AnsweredQuestions/dataset_docs_public.json`,
-100 questions, and `dataset_code_public.json`, 99 questions), retrieving
-with `k=10`:
+Recall was measured with `evaluate` — and cross-checked with the real
+moulinette (`evaluate_student_search_results`), which reports identical
+numbers — against the provided ground-truth datasets
+(`data/datasets/AnsweredQuestions/dataset_docs_public.json`, 100
+questions, and `dataset_code_public.json`, 99 questions), retrieving with
+`k=10`:
 
 | | Recall@1 | Recall@3 | Recall@5 | Recall@10 |
 |---|---|---|---|---|
-| docs | 63.0% | 79.0% | 82.0% | 89.0% |
-| code | 26.3% | 41.4% | 50.5% | — |
+| docs | 63.0% | 77.0% | 84.0% | 87.0% |
+| code | 39.4% | 66.7% | 70.7% | 79.8% |
 
 Both indexing and retrieval are far faster than required — BM25 over a
-corpus this size is cheap. Recall is comfortably above threshold on
-documentation questions but only marginally above threshold on code
-questions (+0.5 point): code questions are harder for a purely lexical
-retriever, since the answer's wording rarely matches identifier names or
-code structure verbatim. This is the main quality lever left if more time
-were available (see [Design decisions](#design-decisions)).
+corpus this size is cheap. Recall clears both thresholds with a
+comfortable margin. It wasn't always this good on code questions: before
+adding identifier expansion (see
+[Retrieval method](#retrieval-method) and
+[Challenges faced](#challenges-faced)), code recall@5 was only 50.5% —
+just barely above the 50% bar.
 
 ## Design decisions
 
@@ -202,6 +213,11 @@ were available (see [Design decisions](#design-decisions)).
   generation) — smaller index, single source of truth for content.
   Trade-off: `data/raw/` must still be present on disk for `answer`,
   `answer_dataset`, and `evaluate` to work.
+- **Identifier expansion for BM25**: appending split snake_case/camelCase
+  subwords to both corpus and query text before tokenization (rather than
+  replacing the original text) preserves exact-identifier matching while
+  adding natural-language matching on top — a strictly additive change
+  that measurably helped code recall without needing an embedding model.
 - **`enable_thinking=False` for Qwen3**: Qwen3 defaults to emitting a
   `<think>...</think>` reasoning block before its answer. Disabling it
   keeps the generated JSON focused on the actual answer instead of
@@ -235,10 +251,16 @@ were available (see [Design decisions](#design-decisions)).
   build. Solved by pinning an explicit CPU wheel index for `torch` in
   `pyproject.toml` and re-verifying `torch.version.cuda is None` after
   every dependency change.
-- **Recall@5 margin on code questions**: getting code-question recall
-  above the 50% threshold took tuning the chunking granularity — the
-  final margin is only +0.5 point, so this metric is worth re-checking
-  after any future change to `src/chunking.py` or `max_chunk_size`.
+- **Recall@5 margin on code questions**: an initial version passed the
+  code threshold with only +0.5 point of margin (50.5% vs. 50%). Digging
+  into `bm25s`'s tokenizer showed why: it tokenizes on word boundaries
+  only, so `get_kv_cache_size` and `kvCacheSize` are indexed as single
+  opaque tokens that never match a natural-language query like "What is
+  a KV cache?" (tokens `kv`, `cache`). Adding
+  `src/tokenization.py::expand_identifiers` to append split subwords for
+  every identifier — on both the corpus and the query — raised code
+  recall@5 from 50.5% to 70.7% without touching docs recall (84.0%,
+  actually up slightly from 82.0%).
 
 ## Example usage
 

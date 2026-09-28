@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from src.chunking import chunk_markdown_source, chunk_python_source
 from src.models import MinimalSource
+from src.tokenization import expand_identifiers
 
 PYTHON_EXTENSIONS = {".py"}
 TEXT_EXTENSIONS = {".md", ".rst", ".txt"}
@@ -74,7 +75,7 @@ def build_index(
                 first_character_index=start,
                 last_character_index=end,
             )
-            corpus_texts.append(text)
+            corpus_texts.append(expand_identifiers(text))
             corpus_metadata.append(source_model.model_dump())
 
     if not corpus_texts:
