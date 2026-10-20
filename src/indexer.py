@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from src.chunking import chunk_markdown_source, chunk_python_source
 from src.models import MinimalSource
-from src.tokenization import expand_identifiers
+from src.tokenization import STOPWORDS, expand_identifiers, path_context
 
 PYTHON_EXTENSIONS = {".py"}
 TEXT_EXTENSIONS = {".md", ".rst", ".txt"}
@@ -50,9 +50,15 @@ def build_index(
     (``file_path``, ``first_character_index``, ``last_character_index``)
     saved alongside the index so retrieval can rebuild sources directly.
 
-    Returns the number of chunks indexed. Raises ``ValueError`` if no
-    indexable file is found under ``raw_dir``.
+    Returns the number of chunks indexed. Raises ``ValueError`` if
+    ``max_chunk_size`` is below 1 or if no indexable file is found under
+    ``raw_dir``.
     """
+    if max_chunk_size < 1:
+        raise ValueError(
+            f"max_chunk_size must be >= 1, got {max_chunk_size}"
+        )
+
     files = _iter_corpus_files(Path(raw_dir))
 
     corpus_texts: List[str] = []
@@ -66,6 +72,7 @@ def build_index(
 
         spans = _chunk_file(source, path.suffix, max_chunk_size)
         file_path = str(path)
+        context = path_context(file_path)
         for start, end in spans:
             text = source[start:end]
             if not text.strip():
@@ -75,22 +82,26 @@ def build_index(
                 first_character_index=start,
                 last_character_index=end,
             )
-            corpus_texts.append(expand_identifiers(text))
+            corpus_texts.append(context + "\n" + expand_identifiers(text))
             corpus_metadata.append(source_model.model_dump())
 
     if not corpus_texts:
         raise ValueError(f"No indexable file found under '{raw_dir}'")
 
     corpus_tokens = bm25s.tokenize(
-        corpus_texts, stopwords=None, show_progress=True, leave=False
+        corpus_texts, stopwords=STOPWORDS, show_progress=True, leave=False
     )
     retriever = bm25s.BM25()
     retriever.index(corpus_tokens, show_progress=True, leave_progress=False)
-
     processed_path = Path(processed_dir)
-    processed_path.mkdir(parents=True, exist_ok=True)
-    retriever.save(
-        str(processed_path), corpus=corpus_metadata, show_progress=True
-    )
+    try:
+        processed_path.mkdir(parents=True, exist_ok=True)
+        retriever.save(
+            str(processed_path), corpus=corpus_metadata, show_progress=True
+        )
+    except OSError as exc:
+        raise OSError(
+            f"Could not save the index under '{processed_dir}': {exc}"
+        ) from exc
 
     return len(corpus_texts)

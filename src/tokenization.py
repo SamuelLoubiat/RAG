@@ -11,6 +11,10 @@ subwords.
 
 import re
 
+# bm25s' built-in English stopword list, shared by indexing and search so
+# both sides tokenize identically.
+STOPWORDS = "en"
+
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _CAMEL_BOUNDARY = re.compile(
     r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])"
@@ -46,3 +50,19 @@ def expand_identifiers(text: str) -> str:
     if not extra_lines:
         return text
     return text + "\n" + "\n".join(extra_lines)
+
+
+_PATH_SEPARATORS = re.compile(r"[/\\_.\-]+")
+
+
+def path_context(file_path: str, depth: int = 2) -> str:
+    """Return the last ``depth`` components of ``file_path`` as words.
+
+    Many files carry their topic in their path rather than their content
+    (``docs/cli/bench/latency.md`` is little more than mkdocs includes),
+    so indexing ``bench latency`` alongside each chunk lets BM25 match
+    such files at all.
+    """
+    parts = file_path.replace("\\", "/").split("/")[-depth:]
+    stem = "/".join(parts).rsplit(".", 1)[0]
+    return _PATH_SEPARATORS.sub(" ", stem).strip()

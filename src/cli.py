@@ -34,7 +34,7 @@ class RagCLI:
         """
         try:
             n_chunks = build_index(raw_dir, processed_dir, max_chunk_size)
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             print(f"Indexing failed: {exc}")
             return
         print(
@@ -105,11 +105,16 @@ class RagCLI:
             )
 
         output = StudentSearchResults(search_results=results, k=k)
-
         out_dir = Path(save_directory)
-        out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / Path(dataset_path).name
-        out_path.write_text(output.model_dump_json(indent=2), encoding="utf-8")
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(
+                output.model_dump_json(indent=2), encoding="utf-8"
+            )
+        except OSError as exc:
+            print(f"Could not save search results to '{out_path}': {exc}")
+            return
         print(f"Saved student_search_results to {out_path}")
 
     def answer(
