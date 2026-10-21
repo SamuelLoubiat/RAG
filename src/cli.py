@@ -25,6 +25,25 @@ from src.search import load_retriever
 from src.search import search as search_sources
 
 
+def _as_text(value: object) -> str:
+    """Rebuild the text Fire parsed into another type ("42", "1,2")."""
+    if isinstance(value, (tuple, list)):
+        return ",".join(str(item) for item in value)
+    return str(value)
+
+
+def _as_int(name: str, value: object) -> int:
+    """Coerce a CLI argument to int, since Fire passes "abc" or 2.5 as is."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            pass
+    raise ValueError(f"--{name} must be an integer, got {value!r}")
+
+
 class RagCLI:
     """Entry point exposing the RAG pipeline commands."""
 
@@ -38,7 +57,11 @@ class RagCLI:
         ``processed_dir``.
         """
         try:
-            n_chunks = build_index(raw_dir, processed_dir, max_chunk_size)
+            n_chunks = build_index(
+                str(raw_dir),
+                str(processed_dir),
+                _as_int("max_chunk_size", max_chunk_size),
+            )
         except (ValueError, OSError) as exc:
             print(f"Indexing failed: {exc}")
             return
@@ -55,12 +78,13 @@ class RagCLI:
     ) -> None:
         """Print the top-k sources for a single query."""
         try:
-            retriever = load_retriever(index_dir)
-        except FileNotFoundError as exc:
+            k = _as_int("k", k)
+            retriever = load_retriever(str(index_dir))
+        except (ValueError, FileNotFoundError) as exc:
             print(exc)
             return
 
-        sources = search_sources(query, k=k, retriever=retriever)
+        sources = search_sources(_as_text(query), k=k, retriever=retriever)
         if not sources:
             print("No results.")
             return
@@ -79,9 +103,11 @@ class RagCLI:
         """Run search over a whole dataset and write a
         StudentSearchResults JSON file under ``save_directory``.
         """
+        dataset_path = str(dataset_path)
         try:
-            retriever = load_retriever(index_dir)
-        except FileNotFoundError as exc:
+            k = _as_int("k", k)
+            retriever = load_retriever(str(index_dir))
+        except (ValueError, FileNotFoundError) as exc:
             print(exc)
             return
 
@@ -110,7 +136,7 @@ class RagCLI:
             )
 
         output = StudentSearchResults(search_results=results, k=k)
-        out_dir = Path(save_directory)
+        out_dir = Path(str(save_directory))
         out_path = out_dir / Path(dataset_path).name
         try:
             out_dir.mkdir(parents=True, exist_ok=True)
@@ -131,13 +157,16 @@ class RagCLI:
         max_new_tokens: int = 256,
     ) -> None:
         """Search for ``query`` and print a generated, grounded answer."""
-        if not str(query).strip():
+        query = _as_text(query)
+        if not query.strip():
             print("Query is empty: nothing to answer.")
             return
 
         try:
-            retriever = load_retriever(index_dir)
-        except FileNotFoundError as exc:
+            k = _as_int("k", k)
+            max_new_tokens = _as_int("max_new_tokens", max_new_tokens)
+            retriever = load_retriever(str(index_dir))
+        except (ValueError, FileNotFoundError) as exc:
             print(exc)
             return
 
@@ -147,7 +176,7 @@ class RagCLI:
             return
 
         try:
-            generator = load_generator(model_name)
+            generator = load_generator(str(model_name))
         except OSError as exc:
             print(f"Could not load model '{model_name}': {exc}")
             return
@@ -171,6 +200,13 @@ class RagCLI:
         """Generate answers for a StudentSearchResults JSON file and write a
         StudentSearchResultsAndAnswer JSON file under ``save_directory``.
         """
+        student_search_results_path = str(student_search_results_path)
+        try:
+            max_new_tokens = _as_int("max_new_tokens", max_new_tokens)
+        except ValueError as exc:
+            print(exc)
+            return
+
         try:
             with open(
                 student_search_results_path, encoding="utf-8"
@@ -187,7 +223,7 @@ class RagCLI:
             return
 
         try:
-            generator = load_generator(model_name)
+            generator = load_generator(str(model_name))
         except OSError as exc:
             print(f"Could not load model '{model_name}': {exc}")
             return
@@ -218,7 +254,7 @@ class RagCLI:
             search_results=answers, k=student_results.k
         )
 
-        out_dir = Path(save_directory)
+        out_dir = Path(str(save_directory))
         out_path = out_dir / Path(student_search_results_path).name
         try:
             out_dir.mkdir(parents=True, exist_ok=True)

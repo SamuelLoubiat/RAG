@@ -52,17 +52,25 @@ def _build_context(
     return "\n\n---\n\n".join(context_blocks)
 
 
-def _build_prompt(question: str, context: str) -> str:
-    """Assemble a grounded prompt from the question and its context."""
-    return (
-        "You are a helpful assistant answering questions about the vLLM "
-        "codebase. Answer the question using only the context below. "
-        "If the context does not contain the answer, say so explicitly "
-        "instead of guessing.\n\n"
-        f"Context:\n{context}\n\n"
-        f"Question: {question}\n"
-        "Answer:"
-    )
+# Qwen3-0.6B over-refuses when told to "say so if the context lacks the
+# answer", so the refusal is reserved for clearly unrelated context.
+SYSTEM_PROMPT = (
+    "You are an expert assistant for the vLLM project. You are given "
+    "excerpts from the vLLM repository that were retrieved for the user's "
+    "question. Write a clear, direct answer of 2 to 5 sentences, based only "
+    "on facts stated in these excerpts, and do not add anything they do not "
+    "support. If the excerpts are about something unrelated to the question, "
+    "answer only: I could not find the answer in the vLLM codebase."
+)
+
+
+def _build_messages(question: str, context: str) -> List[dict[str, str]]:
+    """Assemble the chat messages for a grounded answer."""
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": f"Context:\n{context}\n\n"
+                                    f"Question: {question}"},
+    ]
 
 
 def generate_answer(
@@ -77,8 +85,7 @@ def generate_answer(
     if not question.strip() or not context.strip():
         return NO_ANSWER
     tokenizer, model = generator
-    prompt = _build_prompt(question, context)
-    messages = [{"role": "user", "content": prompt}]
+    messages = _build_messages(question, context)
     prompt_text = cast(
         str,
         tokenizer.apply_chat_template(
@@ -96,6 +103,13 @@ def generate_answer(
             **encoded,
             max_new_tokens=max_new_tokens,
             pad_token_id=tokenizer.eos_token_id,
+            # Greedy decoding keeps answers reproducible across runs; the
+            # penalty avoids the loops greedy search is prone to.
+            do_sample=False,
+            temperature=None,
+            top_p=None,
+            top_k=None,
+            repetition_penalty=1.1,
         ),
     )
     generated_tokens = output[0][input_ids.shape[-1]:]
