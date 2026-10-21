@@ -6,7 +6,12 @@ from pathlib import Path
 from tqdm import tqdm
 
 from src.evaluation import evaluate_recall, format_report
-from src.generation import DEFAULT_MODEL, generate_answer, load_generator
+from src.generation import (
+    DEFAULT_MODEL,
+    NO_ANSWER,
+    generate_answer,
+    load_generator,
+)
 from src.indexer import build_index
 from src.models import (
     AnsweredQuestion,
@@ -126,6 +131,10 @@ class RagCLI:
         max_new_tokens: int = 256,
     ) -> None:
         """Search for ``query`` and print a generated, grounded answer."""
+        if not str(query).strip():
+            print("Query is empty: nothing to answer.")
+            return
+
         try:
             retriever = load_retriever(index_dir)
         except FileNotFoundError as exc:
@@ -133,6 +142,9 @@ class RagCLI:
             return
 
         sources = search_sources(query, k=k, retriever=retriever)
+        if not sources:
+            print(NO_ANSWER)
+            return
 
         try:
             generator = load_generator(model_name)
@@ -207,9 +219,15 @@ class RagCLI:
         )
 
         out_dir = Path(save_directory)
-        out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / Path(student_search_results_path).name
-        out_path.write_text(output.model_dump_json(indent=2), encoding="utf-8")
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(
+                output.model_dump_json(indent=2), encoding="utf-8"
+            )
+        except OSError as exc:
+            print(f"Could not save answers to '{out_path}': {exc}")
+            return
         print(f"Saved student_search_results_and_answer to {out_path}")
 
     def evaluate(

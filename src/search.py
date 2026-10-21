@@ -47,5 +47,13 @@ def search(
     query_tokens = bm25s.tokenize(
         expand_identifiers(query), stopwords=STOPWORDS, show_progress=False
     )
-    results, _ = retriever.retrieve(query_tokens, k=top_k, show_progress=False)
-    return [MinimalSource(**doc) for doc in results[0]]
+    results, scores = retriever.retrieve(
+        query_tokens, k=top_k, show_progress=False
+    )
+    # bm25s always returns top_k docs, even with a zero score (no query
+    # term matched): those are noise, not relevant sources.
+    return [
+        MinimalSource(**doc)
+        for doc, score in zip(results[0], scores[0])
+        if score > 0
+    ]

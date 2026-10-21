@@ -12,6 +12,7 @@ from src.models import MinimalSource
 DEFAULT_MODEL = "Qwen/Qwen3-0.6B"
 MAX_CONTEXT_CHARS = 6000
 DEFAULT_MAX_NEW_TOKENS = 256
+NO_ANSWER = "No relevant context was found to answer this question."
 
 Generator = Tuple[PreTrainedTokenizerBase, PreTrainedModel]
 
@@ -34,12 +35,11 @@ def _read_source_text(source: MinimalSource) -> str:
     return text[source.first_character_index:source.last_character_index]
 
 
-def _build_prompt(
-    question: str,
+def _build_context(
     sources: List[MinimalSource],
     max_context_chars: int = MAX_CONTEXT_CHARS,
 ) -> str:
-    """Assemble a grounded prompt from the question and retrieved sources."""
+    """Concatenate the text of ``sources`` within a character budget."""
     context_blocks = []
     budget = max_context_chars
     for source in sources:
@@ -49,8 +49,11 @@ def _build_prompt(
         block = f"# {source.file_path}\n{text[:budget]}"
         context_blocks.append(block)
         budget -= len(block)
+    return "\n\n---\n\n".join(context_blocks)
 
-    context = "\n\n---\n\n".join(context_blocks)
+
+def _build_prompt(question: str, context: str) -> str:
+    """Assemble a grounded prompt from the question and its context."""
     return (
         "You are a helpful assistant answering questions about the vLLM "
         "codebase. Answer the question using only the context below. "
@@ -69,8 +72,12 @@ def generate_answer(
     max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
 ) -> str:
     """Generate a grounded answer to ``question`` from ``sources``."""
+    context = _build_context(sources)
+    # Without a question or context, the model can only hallucinate.
+    if not question.strip() or not context.strip():
+        return NO_ANSWER
     tokenizer, model = generator
-    prompt = _build_prompt(question, sources)
+    prompt = _build_prompt(question, context)
     messages = [{"role": "user", "content": prompt}]
     prompt_text = cast(
         str,
